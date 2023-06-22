@@ -1,4 +1,5 @@
 import requests
+from datetime import date
 
 from django.shortcuts import render
 from django.http.response import JsonResponse
@@ -18,8 +19,8 @@ from knox.models import AuthToken
 from knox.views import LoginView as KnoxLoginView
 
 
-from .models import User, Appointment
-from .serializers import UserSerializer, AppointmentSerializer
+from .models import User, Appointment, HealthRecords
+from .serializers import UserSerializer, AppointmentSerializer, HealthRecordSerializer
 # Create your views here.
 
 
@@ -85,7 +86,7 @@ class UsersAPI(generics.GenericAPIView):
         """Get all users"""
         users = User.objects.all()
         users_serializer = UserSerializer(users, many=True)
-        return Response({"all_users": users_serializer.data}, status.HTTP_200_OK)
+        return Response(users_serializer.data, status.HTTP_200_OK)
 
 
 class LoginAPI(KnoxLoginView):
@@ -96,6 +97,7 @@ class LoginAPI(KnoxLoginView):
         print (auth_serializer)
         if auth_serializer.is_valid():
             user = auth_serializer.validated_data['user']
+            print(user)
             login(request, user)
 
             chat_params = requests.get('https://api.chatengine.io/users/me/',
@@ -131,7 +133,7 @@ class SingleUserAPI(generics.RetrieveUpdateAPIView):
         print(request.user)
         print(request.user.username)
 
-        return Response({f"user: {request.user.id}": user_serializer.data, "chat_params": chat_params.json()}, status.HTTP_200_OK)
+        return Response({f"user": user_serializer.data, "chat_params": chat_params.json()}, status.HTTP_200_OK)
 
 
 # @api_view(["GET", "POST", "PUT", "DELETE"])
@@ -203,11 +205,26 @@ class AppointmentsAPI(generics.ListCreateAPIView):
             else:
                 return Response({"error": "Doctor not found"}, status.HTTP_404_NOT_FOUND)
 
-            time_choice = request.data['time_choice']
-            serializer.validated_data['time_choice'] = time_choice
+            if request.data.get('date_choice'):
+                date_choice = request.data.get('date_choice')
+                serializer.validated_data['date_choice'] = date_choice
+            else:
+                date_choice = date.today
+
+            name = request.data['name']
+            serializer.validated_data['name'] = name
+
+            description = request.data['description']
+            serializer.validated_data['description'] = description
 
             meeting_link = request.data['meeting_link']
             serializer.validated_data['meeting_link'] = meeting_link
+
+            if request.data.get('scheduled_time'):
+                scheduled_time = request.data.get('scheduled_time')
+                serializer.validated_data['scheduled_time'] = scheduled_time
+            else:
+                scheduled_time = "3 PM"
 
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
@@ -246,8 +263,18 @@ class ChatsAPI(generics.GenericAPIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request):
+        if request.path.endswith('/chats/'):
+            return self.create_chat(request)
+        elif request.path.endswith('/messages/'):
+            return self.send_message(request)
+        else:
+            return Response({"error": "Invalid url endpoint"}, status.HTTP_400_BAD_REQUEST)
+
+
+    def create_chat(self, request):
         """Creates a new chat"""
         user_serializer = self.get_serializer(request.user)
+        print(user_serializer)
         print(request.user)
 
         url = 'https://api.chatengine.io/chats/'
@@ -279,3 +306,137 @@ class ChatsAPI(generics.GenericAPIView):
         updated = requests.get(url=chat_url, headers=headers)
 
         return Response(updated.json(), status.HTTP_201_CREATED)
+
+    
+    def send_message(self, request):
+        user_serializer = self.get_serializer(request.user)
+        print(user_serializer)
+        print(request.user)
+
+        chat_id = request.data["chat_id"]     
+
+        message_url = f'https://api.chatengine.io/chats/{chat_id}/messages/'
+
+        payload = {
+            "text": request.data["text"],
+            "attachment_urls": request.data["attachment_urls"],
+            "custom_json": request.data["custom_json"]
+        }
+
+        headers = {
+            "Project-ID": "88023f13-96c0-4c4c-93ad-2ad0f9262e82",
+            "User-Name": request.user.username,
+            "User-Secret": "secret",
+        }
+
+        try:
+            new_message = requests.post(url=message_url, headers=headers, json=payload)
+            return Response(new_message.json(), status.HTTP_201_CREATED)
+        except Exception as err:
+            return Response(err, status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+    def get(self, request):
+        if request.path.endswith('/chats/'):
+            return self.get_chats(request)
+        elif request.path.endswith('/messages/'):
+            return self.get_messages(request)
+        else:
+            return Response({"error": "Invalid url endpoint"}, status.HTTP_400_BAD_REQUEST)
+
+
+    def get_chats(self, request):
+        user_serializer = self.get_serializer(request.user)
+        print(user_serializer)
+        print(request.user)
+
+        chats_url = f'https://api.chatengine.io/chats/'
+
+        payload = {}
+
+        headers = {
+            "Project-ID": "88023f13-96c0-4c4c-93ad-2ad0f9262e82",
+            "User-Name": request.user.username,
+            "User-Secret": "secret",
+        }
+        try:
+            chats = requests.get(url=chats_url, headers=headers)
+            return Response(chats.json(), status.HTTP_200_OK)
+        except Exception as err:
+            return Response(err, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def get_messages(self, request):
+        user_serializer = self.get_serializer(request.user)
+        print(user_serializer)
+        print(request.user)
+
+        chat_id = request.data["chat_id"]     
+
+        messages_url = f'https://api.chatengine.io/chats/{chat_id}/messages/'
+
+        payload = {}
+
+        headers = {
+            "Project-ID": "88023f13-96c0-4c4c-93ad-2ad0f9262e82",
+            "User-Name": request.user.username,
+            "User-Secret": "secret",
+        }
+        try:
+            messages = requests.get(url=messages_url, headers=headers)
+            return Response(messages.json(), status.HTTP_200_OK)
+        except Exception as err:
+            return Response(err, status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+class HealthRecordsAPI(generics.ListCreateAPIView):
+    queryset = HealthRecords.objects.all()
+    serializer_class = HealthRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """ Retrieve appointments for the authenticated user """
+        return self.queryset.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.validated_data['user'] = self.request.user
+
+            doctor_id = request.data['doctor']
+            doctor = User.objects.get(id=doctor_id)
+
+            if doctor:
+                serializer.validated_data['doctor'] = doctor
+            else:
+                return Response({"error": "Doctor not found"}, status.HTTP_404_NOT_FOUND)
+
+            title = request.data["title"]
+            serializer.validated_data["title"] = title
+
+            description = request.data["description"]
+            serializer.validated_data["description"] = description
+
+            prescription = request.data["prescription"]
+            serializer.validated_data["prescription"] = prescription
+
+            attachment = request.data["attachment"]
+            serializer.validated_data["attachment"] = attachment
+
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+
+            return Response(serializer.data, status.HTTP_201_CREATED, headers=headers)
+        
+        return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+    
+
+    def perform_create(self, serializer):
+        """Overwrite to perform compression before saving attachment"""
+        record = serializer.save()
+
+        if record.attachment:
+            record.compress_image()
+            record.save()
+            
+        return super().perform_create(serializer)

@@ -1,6 +1,6 @@
 from rest_framework import viewsets, serializers
 
-from .models import User, Appointment
+from .models import User, Appointment, HealthRecords
 
 MIN_LENGTH = 8
 
@@ -25,7 +25,14 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AppointmentSerializer(serializers.ModelSerializer):
     """ Appointment serializer class """
+    doctor_name = serializers.ReadOnlyField(source='doctor.username')
 
     class Meta:
         model = Appointment
+        fields = '__all__'
+
+class HealthRecordSerializer(serializers.ModelSerializer):
+    """Health Records serializer"""
+    class Meta:
+        model = HealthRecords
         fields = '__all__'

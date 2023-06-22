@@ -15,6 +15,7 @@ from .views import ( DoctorsAPIView,
                     AppointmentUpdateAPI,
                     AppointmentDeleteAPI,
                     ChatsAPI,
+                    HealthRecordsAPI,
                     )
 
 # router = DefaultRouter()
@@ -27,9 +28,11 @@ urlpatterns = [
     path('users/patients/', PatientsAPIView.as_view(), name='patients'),
     path('users/profile/', SingleUserAPI.as_view(), name='user'),
     path('users/appointments/', AppointmentsAPI.as_view(), name='appointments'),
-    path('users/appointments/<str:pk>/', AppointmentUpdateAPI.as_view(), name='appointments'),
-    path('users/appointments/<str:pk>/delete/', AppointmentDeleteAPI.as_view(), name='appointments'),
+    path('users/appointments/<int:pk>/', AppointmentUpdateAPI.as_view(), name='appointments'),
+    path('users/appointments/<int:pk>/delete/', AppointmentDeleteAPI.as_view(), name='appointments'),
+    path('users/records/', HealthRecordsAPI.as_view(), name='records'),
     path('users/chats/', ChatsAPI.as_view(), name='chats'),
+    path('users/chats/messages/', ChatsAPI.as_view(), name='messages'),
     path('api/login/', LoginAPI.as_view(), name='login'),
     path('users/logout/', knox_views.LogoutView.as_view(), name='logout'),
     # path('users/', views.all_users),
